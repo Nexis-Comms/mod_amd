@@ -1,0 +1,56 @@
+################################
+### FreeSWITCH dev paths (tweak if needed) ###
+FS_INCLUDES ?= /usr/include/freeswitch
+FS_MODULES  ?= /usr/lib/freeswitch/mod
+# e.g. on some systems:
+# FS_MODULES ?= /usr/lib64/freeswitch/mod
+################################
+### END OF CUSTOMIZATION ###
+
+SHELL  := /bin/bash
+PROC   ?= $(shell uname -m)
+CC     ?= gcc
+
+# Try to discover FreeSWITCH cflags/libs via pkg-config (preferred)
+FS_CFLAGS := $(shell pkg-config --cflags freeswitch 2>/dev/null || pkg-config --cflags freeswitch-core 2>/dev/null)
+FS_LIBS   := $(shell pkg-config --libs   freeswitch 2>/dev/null || pkg-config --libs   freeswitch-core 2>/dev/null)
+
+# Build flags
+CFLAGS   ?= -fPIC -O3 -fomit-frame-pointer -fno-exceptions -Wall -Wextra -pedantic -std=c11
+INCLUDES ?= -I/usr/include -I$(FS_INCLUDES) $(FS_CFLAGS)
+
+# Link flags
+LDFLAGS  ?= -shared -Wl,-x
+# If pkg-config didn’t yield anything, fall back to basic libs
+LIBS     := $(if $(FS_LIBS),$(FS_LIBS),-lm -ldl)
+
+# Targets
+TARGET := mod_amd.so
+SRCS   := mod_amd.c
+OBJS   := $(SRCS:.c=.o)
+
+.PHONY: all clean distclean install uninstall print-% default
+
+default: all
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) $(OBJS) $(LDFLAGS) -o $@ $(LIBS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+clean:
+	rm -f *.o *.so *.a *.la
+
+distclean: clean
+
+install: all
+	install -d $(DESTDIR)$(FS_MODULES)
+	install -m 0755 $(TARGET) $(DESTDIR)$(FS_MODULES)/
+
+uninstall:
+	rm -f $(DESTDIR)$(FS_MODULES)/$(TARGET)
+
+print-%:
+	@echo $*=$($*)

@@ -137,22 +137,48 @@ typedef struct amd_vad_c {
 /* Fire a custom event and queue a clone to the session */
 static void amd_fire_event(const char *result, const char *cause, switch_core_session_t *fs_s)
 {
-    switch_event_t *event = NULL, *event_copy = NULL;
+    switch_event_t *event = NULL;
+    switch_event_t *event_copy = NULL;
 
     if (switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, "amd") != SWITCH_STATUS_SUCCESS) {
         return;
     }
+
+    /* AMD result/cause */
     switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "AMD-Result", result);
     switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "AMD-Cause", cause);
+
+    /* Include channel identifiers */
+    if (fs_s) {
+        const char *uuid = switch_core_session_get_uuid(fs_s);
+        if (uuid) {
+            switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Unique-ID", uuid);
+            /* If you also want an alias, uncomment:
+               switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Channel-Unique-ID", uuid);
+            */
+        }
+        /* Optional, handy for debugging */
+        {
+            switch_channel_t *ch = switch_core_session_get_channel(fs_s);
+            if (ch) {
+                const char *ch_name = switch_channel_get_name(ch);
+                if (ch_name) {
+                    switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Channel-Name", ch_name);
+                }
+            }
+        }
+    }
 
     if (switch_event_dup(&event_copy, event) != SWITCH_STATUS_SUCCESS) {
         switch_event_destroy(&event);
         return;
     }
 
+    /* Queue to the session and fire globally */
     switch_core_session_queue_event(fs_s, &event);
     switch_event_fire(&event_copy);
 }
+
 
 static amd_frame_classifier classify_frame(uint32_t silence_threshold, const switch_frame_t *f, const switch_codec_implementation_t *codec)
 {
